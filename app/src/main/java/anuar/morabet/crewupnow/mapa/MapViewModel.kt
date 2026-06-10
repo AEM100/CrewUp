@@ -10,7 +10,6 @@ import anuar.morabet.crewupnow.mapa.data.MapUiState
 import anuar.morabet.crewupnow.network.SocketClient
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
-import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
