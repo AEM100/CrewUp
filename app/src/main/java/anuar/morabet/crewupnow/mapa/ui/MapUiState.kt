@@ -1,5 +1,6 @@
-package anuar.morabet.crewupnow.mapa.data
+package anuar.morabet.crewupnow.mapa.ui
 
+import anuar.morabet.crewupnow.mapa.data.MapEvent
 import com.google.android.gms.maps.model.LatLng
 
 data class MapUiState(
@@ -10,5 +11,6 @@ data class MapUiState(
     val showCreateDialog: Boolean = false,
     val newEventTitle: String = "",
     val newEventDesc: String = "",
-    val selectedEventForDetails: MapEvent? = null
+    val selectedEventForDetails: MapEvent? = null,
+    val newEventDate: String = ""
 )

@@ -42,7 +42,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-
+    implementation("org.json:json:20231013")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
     // Mapas (Google Maps Compose)
     implementation("com.google.maps.android:maps-compose:4.4.1")
     implementation(libs.play.services.maps)
@@ -52,6 +53,7 @@ dependencies {
 
     // Kotlin Reflect
     implementation("org.jetbrains.kotlin:kotlin-reflect")
+    implementation(libs.transport.api)
 
     // Testing
     testImplementation(libs.junit)

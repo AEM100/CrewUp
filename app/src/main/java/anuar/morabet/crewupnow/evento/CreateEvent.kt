@@ -18,13 +18,61 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import anuar.morabet.crewupnow.mapa.MapUiAction
-import anuar.morabet.crewupnow.mapa.data.MapUiState
+import anuar.morabet.crewupnow.mapa.ui.MapUiState
+
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.SegmentedButtonDefaults.Icon
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
+import java.util.Calendar
 
 @Composable
 fun CreateEventDialog(
     state: MapUiState,
     onAction: (MapUiAction) -> Unit
 ) {
+    val context = LocalContext.current
+
+    // Configuramos el selector de fecha y hora nativo de Android
+    val abrirSelectorFechaHora = {
+        val calendario = Calendar.getInstance()
+
+        // 1. Abrimos el calendario para elegir el Día
+        DatePickerDialog(
+            context,
+            { _, año, mes, dia ->
+                // 2. Al aceptar el día, abrimos el reloj para elegir la Hora
+                TimePickerDialog(
+                    context,
+                    { _, hora, minuto ->
+                        // Formateamos los valores para que tengan siempre dos dígitos (Ej: "05" en vez de "5")
+                        val mesFormateado = String.format("%02d", mes + 1)
+                        val diaFormateado = String.format("%02d", dia)
+                        val horaFormateada = String.format("%02d", hora)
+                        val minutoFormateado = String.format("%02d", minuto)
+
+                        // Construimos el String ISO estándar que espera Java: "YYYY-MM-DDTHH:mm:ss"
+                        val fechaIsoResult = "$año-$mesFormateado-${diaFormateado}T$horaFormateada:$minutoFormateado:00"
+
+                        onAction(MapUiAction.OnNewDateChanged(fechaIsoResult))
+                    },
+                    calendario.get(Calendar.HOUR_OF_DAY),
+                    calendario.get(Calendar.MINUTE),
+                    true // Formato de 24 horas
+                ).show()
+            },
+            calendario.get(Calendar.YEAR),
+            calendario.get(Calendar.MONTH),
+            calendario.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
     Dialog(onDismissRequest = { onAction(MapUiAction.OnCancelCreateEvent) }) {
         Surface(
             shape = RoundedCornerShape(16.dp),
@@ -61,6 +109,43 @@ fun CreateEventDialog(
                     maxLines = 3
                 )
 
+                // 🗓️ 🔥 NUEVA SECCIÓN DE SELECCIÓN DE FECHA OBLIGATORIA
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Fecha y hora del evento *",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = state.newEventDate.replace("T", "  Hora: "), // Hace que se vea más amigable en pantalla
+                            onValueChange = {},
+                            readOnly = true, // Evita que el usuario escriba a mano
+                            placeholder = { Text("Ninguna fecha seleccionada") },
+                            modifier = Modifier.weight(1f),
+                            textStyle = MaterialTheme.typography.bodyMedium
+                        )
+
+                        IconButton(
+                            onClick = { abrirSelectorFechaHora() },
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DateRange, // Icono de calendario nativo
+                                contentDescription = "Elegir fecha",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -73,7 +158,8 @@ fun CreateEventDialog(
                     }
                     Button(
                         onClick = { onAction(MapUiAction.OnConfirmCreateEvent) },
-                        enabled = state.newEventTitle.isNotBlank(),
+                        // 🔥 OBLIGATORIO: Se activa solo si tiene título Y si ha elegido una fecha
+                        enabled = state.newEventTitle.isNotBlank() && state.newEventDate.isNotBlank(),
                         modifier = Modifier.weight(1.5f)
                     ) {
                         Text("Crear Evento")

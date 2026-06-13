@@ -15,4 +15,7 @@ sealed interface MapUiAction {
     object OnConfirmCreateEvent : MapUiAction
     object OnDismissDetails : MapUiAction
     data class OnToggleJoinEvent(val event: MapEvent) : MapUiAction
+    data class OnDeleteEvent(val eventId: String) : MapUiAction
+    data class OnNewDateChanged(val isoDateTime: String) : MapUiAction
+    data class OnBanUser(val userId: Int) : MapUiAction
 }

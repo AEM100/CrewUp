@@ -9,6 +9,7 @@ data class MapEvent(
     val date: String,
     val organizer: String,
     val coordinates: LatLng,
+    val creatorId: Int,
     val participantsCount: Int,
     val isUserJoined: Boolean = false
 )

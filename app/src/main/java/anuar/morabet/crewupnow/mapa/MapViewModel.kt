@@ -1,99 +1,104 @@
 package anuar.morabet.crewupnow.mapa
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import anuar.morabet.crewupnow.data.repository.EventRepository
 import anuar.morabet.crewupnow.mapa.data.MapEvent
-import anuar.morabet.crewupnow.mapa.data.MapUiState
+import anuar.morabet.crewupnow.mapa.ui.MapUiState
 import anuar.morabet.crewupnow.network.SocketClient
-import com.google.android.gms.maps.model.BitmapDescriptor
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import anuar.morabet.crewupnow.paneleUsuario.SessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
 
 class MapViewModel : ViewModel() {
 
+    private val TAG = "DEBUG_MAP_VM"
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState = _uiState.asStateFlow()
-    private val socketClient = SocketClient()
 
     init {
-        Log.d("ffffffffff", "iniciado")
-
-        connectToServer()
+        Log.d(TAG, "MapViewModel inicializado")
+        observeEvents()
     }
 
-    private fun connectToServer() {
-
-        viewModelScope.launch(Dispatchers.IO) {
-            val connected =
-                socketClient.connect(
-                    host = "192.168.1.48",
-                    port = 9000
-                )
-
-            Log.d("ffffffffff", connected.toString())
+    private fun observeEvents() {
+        viewModelScope.launch {
+            EventRepository.events.collect { events ->
+                Log.d(TAG, "Eventos actualizados. Cantidad recibida: ${events.size}")
+                _uiState.update { state ->
+                    // 🔥 Si hay un evento abierto en detalles, buscamos su versión más fresca de la lista
+                    val updatedDetails = state.selectedEventForDetails?.let { currentDetails ->
+                        events.find { it.id == currentDetails.id }
+                    }
+                    state.copy(
+                        eventsList = events,
+                        selectedEventForDetails = updatedDetails // Mantendrá el ✅ o el número real
+                    )
+                }
+            }
         }
     }
 
     fun onAction(action: MapUiAction) {
+        Log.d(TAG, "Acción recibida: ${action::class.simpleName}")
+
         when (action) {
             is MapUiAction.OnTabSelected -> {
-                _uiState.value = _uiState.value.copy(selectedTab = action.tabIndex)
+                _uiState.update { it.copy(selectedTab = action.tabIndex) }
             }
             is MapUiAction.OnMapClicked -> {
                 val state = _uiState.value
                 if (state.isSelectionModeActive) {
-                    _uiState.value = state.copy(
-                        pendingEventCoords = action.coordinates,
-                        showCreateDialog = true,
-                        isSelectionModeActive = false
-                    )
+                    _uiState.update {
+                        it.copy(
+                            pendingEventCoords = action.coordinates,
+                            showCreateDialog = true,
+                            isSelectionModeActive = false
+                        )
+                    }
                 }
             }
             MapUiAction.OnToggleSelectionMode -> {
-                val currentMode = _uiState.value.isSelectionModeActive
-                _uiState.value = _uiState.value.copy(isSelectionModeActive = !currentMode)
+                _uiState.update { it.copy(isSelectionModeActive = !it.isSelectionModeActive) }
             }
             MapUiAction.OnCancelSelectionMode -> {
-                _uiState.value = _uiState.value.copy(isSelectionModeActive = false)
+                _uiState.update { it.copy(isSelectionModeActive = false) }
             }
             is MapUiAction.OnEventTagClicked -> {
-                _uiState.value = _uiState.value.copy(selectedEventForDetails = action.event)
+                _uiState.update { it.copy(selectedEventForDetails = action.event) }
             }
             is MapUiAction.OnNewTitleChanged -> {
-                _uiState.value = _uiState.value.copy(newEventTitle = action.title)
+                _uiState.update { it.copy(newEventTitle = action.title) }
             }
             is MapUiAction.OnNewDescChanged -> {
-                _uiState.value = _uiState.value.copy(newEventDesc = action.description)
+                _uiState.update { it.copy(newEventDesc = action.description) }
+            }
+            is MapUiAction.OnDeleteEvent -> {
+                viewModelScope.launch {
+                    Log.d(TAG, "Intentando eliminar evento ID: ${action.eventId}")
+                    // 1. Solicitamos borrar en MySQL mediante el socket
+                    val exito = EventRepository.persistirEliminarEvento(action.eventId)
+
+                    if (exito) {
+                        Log.d(TAG, "Eliminación exitosa en servidor")
+                        // 2. Si el servidor lo borró con éxito, lo quitamos de la UI local
+                        EventRepository.removeEventLocal(action.eventId)
+
+                        // 3. Cerramos el diálogo de detalles puesto que el evento ya no existe
+                        _uiState.update { it.copy(selectedEventForDetails = null) }
+                    } else {
+                        Log.e(TAG, "Error al eliminar evento en servidor")
+                    }
+                }
             }
             MapUiAction.OnCancelCreateEvent -> {
-                _uiState.value = _uiState.value.copy(
-                    showCreateDialog = false,
-                    pendingEventCoords = null,
-                    newEventTitle = "",
-                    newEventDesc = ""
-                )
-            }
-            MapUiAction.OnConfirmCreateEvent -> {
-                val state = _uiState.value
-                val coords = state.pendingEventCoords
-                if (coords != null && state.newEventTitle.isNotBlank()) {
-                    val newEvent = MapEvent(
-                        id = (state.eventsList.size + 1).toString(),
-                        title = state.newEventTitle,
-                        description = state.newEventDesc,
-                        date = "Hoy - 19:00h",
-                        organizer = "Yo",
-                        coordinates = coords,
-                        participantsCount = 1
-                    )
-                    _uiState.value = state.copy(
-                        eventsList = state.eventsList + newEvent,
+                _uiState.update {
+                    it.copy(
                         showCreateDialog = false,
                         pendingEventCoords = null,
                         newEventTitle = "",
@@ -101,128 +106,147 @@ class MapViewModel : ViewModel() {
                     )
                 }
             }
-            MapUiAction.OnDismissDetails -> {
-                _uiState.value = _uiState.value.copy(selectedEventForDetails = null)
-            }
-            is MapUiAction.OnToggleJoinEvent -> {
+
+            MapUiAction.OnConfirmCreateEvent -> {
                 val state = _uiState.value
-                val updatedList = state.eventsList.map { event ->
-                    if (event.id == action.event.id) {
-                        event.copy(
-                            isUserJoined = !event.isUserJoined,
-                            participantsCount = if (event.isUserJoined) event.participantsCount - 1 else event.participantsCount + 1
+                val coords = state.pendingEventCoords
+                val currentUser = SessionManager.currentUser
+
+                if (coords != null && state.newEventTitle.isNotBlank() && state.newEventDate.isNotBlank() && currentUser != null) {
+                    viewModelScope.launch {
+                        Log.d(TAG, "Confirmando creación de evento por usuario: ${currentUser.id}")
+                        // 1. Enviamos a Java y guardamos el ID real que nos devuelve MySQL
+                        val realId = EventRepository.persistirNuevoEvento(
+                            title = state.newEventTitle,
+                            desc = state.newEventDesc,
+                            lat = coords.latitude,
+                            lng = coords.longitude,
+                            userId = currentUser.id,
+                            fecha = state.newEventDate
                         )
-                    } else event
+
+                        // 2. Si el servidor respondió con éxito (tenemos ID real)
+                        if (realId != null) {
+                            Log.d(TAG, "Evento creado con ID: $realId")
+                            // 🔥 AQUÍ ESTÁ EL CAMBIO: Creamos el objeto con los datos exactos del servidor
+                            val newEvent = MapEvent(
+                                id = realId.toString(), // Usamos el ID de la base de datos, NO el timeMillis
+                                title = state.newEventTitle,
+                                description = state.newEventDesc,
+                                date = state.newEventDate, // Usamos la fecha real, no "Hoy"
+                                organizer = currentUser.name,
+                                creatorId = currentUser.id, // 🔥 CRUCIAL: Añadimos el creatorId real
+                                coordinates = coords,
+                                participantsCount = 1,
+                                isUserJoined = true
+                            )
+
+                            // Añadimos el evento real al repositorio
+                            EventRepository.addEvent(newEvent)
+                        } else {
+                            Log.e(TAG, "Error: El servidor no devolvió un ID válido")
+                        }
+
+                        // 3. Reseteamos el estado
+                        _uiState.update {
+                            it.copy(
+                                showCreateDialog = false,
+                                pendingEventCoords = null,
+                                newEventTitle = "",
+                                newEventDesc = "",
+                                newEventDate = ""
+                            )
+                        }
+                    }
                 }
-                _uiState.value = state.copy(
-                    eventsList = updatedList,
-                    selectedEventForDetails = null
-                )
+            }
+
+            MapUiAction.OnDismissDetails -> {
+                _uiState.update { it.copy(selectedEventForDetails = null) }
+            }
+
+            // 🔥 CAMBIO 2: UNIRSE / SALIR DEL EVENTO REAL
+            is MapUiAction.OnToggleJoinEvent -> {
+                val currentUser = SessionManager.currentUser
+                Log.d(TAG, "Toggle Join. Usuario: ${currentUser?.id}, Evento: ${action.event.id}")
+
+                if (currentUser != null) {
+                    viewModelScope.launch {
+                        // Comprobamos si ya asistía para mandarle la acción inversa a Java
+                        val actualmenteUnido = action.event.isUserJoined
+
+                        // 1. Avisamos al servidor a través del socket
+                        val exito = EventRepository.persistirToggleJoin(
+                            eventId = action.event.id,
+                            userId = currentUser.id,
+                            join = !actualmenteUnido
+                        )
+
+                        // 2. Si MySQL actualizó la tabla intermedia correctamente, cambiamos el estado local
+                        if (exito) {
+                            Log.d(TAG, "Toggle Join exitoso en servidor")
+                            EventRepository.toggleJoinEvent(action.event.id)
+                        } else {
+                            Log.e(TAG, "Error en Toggle Join en servidor")
+                        }
+
+                        _uiState.update { it.copy(selectedEventForDetails = null) }
+                    }
+                }
+            }
+
+            is MapUiAction.OnNewDateChanged -> {
+                _uiState.update { it.copy(newEventDate = action.isoDateTime) }
+            }
+
+            is MapUiAction.OnBanUser -> {
+                val currentUser = SessionManager.currentUser
+                Log.d(TAG, "Intento de baneo. Admin actual: ${currentUser?.name}, EsAdmin: ${currentUser?.isAdmin}")
+
+                // Solo si estamos seguros de que es Admin
+                if (currentUser != null && currentUser.isAdmin) {
+                    viewModelScope.launch {
+                        // 1. Llamamos al servidor
+                        Log.d(TAG, "Llamando a persistirBanUser para ID: ${action.userId}")
+                        val exito = EventRepository.persistirBanUser(
+                            userIdToBan = action.userId, // El ID del organizador que vamos a banear
+                            adminId = currentUser.id      // Nuestro ID para validar permisos en Java
+                        )
+
+                        if (exito) {
+                            Log.d(TAG, "Baneo exitoso")
+                            // 2. Opcional: Si el baneo es exitoso, podríamos limpiar la UI
+                            _uiState.update { it.copy(selectedEventForDetails = null) }
+
+                            // 3. (Opcional) Recargar eventos para que los eventos de ese usuario desaparezcan
+                            EventRepository.cargarEventosDelServidor()
+                        } else {
+                            Log.e(TAG, "Error al banear en servidor")
+                        }
+                    }
+                } else {
+                    Log.w(TAG, "Acción de baneo rechazada: usuario no es admin o es nulo")
+                }
             }
         }
     }
-}
 
+    private fun formatearFechaParaUI(fechaIso: String): String {
+        return try {
+            val partes = fechaIso.split("T")
+            val fechaComponentes = partes[0].split("-")
+            val horaComponentes = partes[1].split(":")
 
-// ============================================================================
-// DIBUJADO DE MAP CHIPS DINÁMICOS
-// ============================================================================
-fun createEventTagBitmap(
-    context: android.content.Context,
-    title: String,
-    isJoined: Boolean,
-    isPending: Boolean = false
-): BitmapDescriptor? {
-    return try {
-        val density = context.resources.displayMetrics.density
+            val dia = fechaComponentes[2]
+            val mes = fechaComponentes[1]
+            val año = fechaComponentes[0]
+            val hora = horaComponentes[0]
+            val minuto = horaComponentes[1]
 
-        val fontSize = 13f * density
-        val horizontalPadding = 12f * density
-        val verticalPadding = 8f * density
-        val cornerRadius = 16f * density
-        val triangleHeight = 6f * density
-
-        val textPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.WHITE
-            textSize = fontSize
-            typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            "$dia/$mes/$año a las $hora:${minuto}h"
+        } catch (e: Exception) {
+            e.printStackTrace()
+            fechaIso
         }
-
-        val emoji = when {
-            isPending -> "📍 "
-            title.contains("Basket", ignoreCase = true) || title.contains("Baloncesto", ignoreCase = true) -> "🏀 "
-            title.contains("Yoga", ignoreCase = true) || title.contains("Meditación", ignoreCase = true) -> "🧘 "
-            title.contains("Vóley", ignoreCase = true) || title.contains("Volley", ignoreCase = true) -> "🏐 "
-            title.contains("Clase", ignoreCase = true) || title.contains("Curso", ignoreCase = true) -> "📚 "
-            isJoined -> "✅ "
-            else -> "✨ "
-        }
-        val fullText = "$emoji$title"
-
-        val textWidth = textPaint.measureText(fullText)
-        val fontMetrics = textPaint.fontMetrics
-        val textHeight = fontMetrics.descent - fontMetrics.ascent
-
-        val bubbleWidth = textWidth + (horizontalPadding * 2)
-        val bubbleHeight = textHeight + (verticalPadding * 2)
-        val bitmapWidth = (bubbleWidth + (4f * density)).toInt()
-        val bitmapHeight = (bubbleHeight + triangleHeight + (4f * density)).toInt()
-
-        val bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-
-        val shadowPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.argb(45, 0, 0, 0)
-            style = android.graphics.Paint.Style.FILL
-        }
-
-        val bgPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = when {
-                isPending -> android.graphics.Color.parseColor("#F57F17")
-                isJoined -> android.graphics.Color.parseColor("#2E7D32")
-                else -> android.graphics.Color.parseColor("#6200EE")
-            }
-            style = android.graphics.Paint.Style.FILL
-        }
-
-        val borderPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.WHITE
-            style = android.graphics.Paint.Style.STROKE
-            strokeWidth = 2f * density
-        }
-
-        val offset = 2f * density
-
-        val shadowRect = android.graphics.RectF(offset, offset, bubbleWidth + offset, bubbleHeight + offset)
-        canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, shadowPaint)
-        val shadowPath = android.graphics.Path().apply {
-            moveTo((bubbleWidth / 2f) - (6f * density) + offset, bubbleHeight + offset)
-            lineTo((bubbleWidth / 2f) + (6f * density) + offset, bubbleHeight + offset)
-            lineTo((bubbleWidth / 2f) + offset, bubbleHeight + triangleHeight + offset)
-            close()
-        }
-        canvas.drawPath(shadowPath, shadowPaint)
-
-        val rect = android.graphics.RectF(0f, 0f, bubbleWidth, bubbleHeight)
-        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, bgPaint)
-        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, borderPaint)
-
-        val trianglePath = android.graphics.Path().apply {
-            moveTo((bubbleWidth / 2f) - (6f * density), bubbleHeight - 1f)
-            lineTo((bubbleWidth / 2f) + (6f * density), bubbleHeight - 1f)
-            lineTo((bubbleWidth / 2f), bubbleHeight + triangleHeight)
-            close()
-        }
-        canvas.drawPath(trianglePath, bgPaint)
-        canvas.drawPath(trianglePath, borderPaint)
-
-        val textX = horizontalPadding
-        val textY = (bubbleHeight / 2f) - (fontMetrics.descent + fontMetrics.ascent) / 2f
-        canvas.drawText(fullText, textX, textY, textPaint)
-
-        BitmapDescriptorFactory.fromBitmap(bitmap)
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
     }
 }

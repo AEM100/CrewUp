@@ -1,4 +1,4 @@
-package anuar.morabet.crewupnow.login
+package anuar.morabet.crewupnow.auth
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,18 +13,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 
 @Composable
 fun LoginScreen(
-    uiState: LoginUiState,
-    onAction: (LoginAction) -> Unit
+    onAction: (AuthAction) -> Unit,
+    error: String? = null
 ) {
 
     var email by rememberSaveable {
@@ -43,7 +46,7 @@ fun LoginScreen(
     ) {
 
         Text(
-            text = "Login",
+            text = "Iniciar sesión",
             style = MaterialTheme.typography.headlineMedium
         )
 
@@ -56,8 +59,7 @@ fun LoginScreen(
             },
             label = {
                 Text("Email")
-            },
-            modifier = Modifier.fillMaxWidth()
+            }
         )
 
         Spacer(Modifier.height(12.dp))
@@ -69,64 +71,42 @@ fun LoginScreen(
             },
             label = {
                 Text("Contraseña")
-            },
-            modifier = Modifier.fillMaxWidth()
+            }
         )
+
+        error?.let {
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
 
         Spacer(Modifier.height(24.dp))
 
         Button(
-            modifier = Modifier.fillMaxWidth(),
             onClick = {
                 onAction(
-                    LoginAction.Login(
+                    AuthAction.Login(
                         email,
                         password
                     )
                 )
             }
         ) {
-            Text("Iniciar sesión")
+            Text("Entrar")
         }
 
-        Spacer(Modifier.height(8.dp))
-
-        OutlinedButton(
-            modifier = Modifier.fillMaxWidth(),
+        TextButton(
             onClick = {
                 onAction(
-                    LoginAction.Register(
-                        email,
-                        password
-                    )
+                    AuthAction.ShowRegister
                 )
             }
         ) {
             Text("Crear cuenta")
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        when (uiState) {
-
-            LoginUiState.Idle -> Unit
-
-            LoginUiState.Loading -> {
-                CircularProgressIndicator()
-            }
-
-            is LoginUiState.Success -> {
-                Text(
-                    text = "Usuario: ${uiState.userId}"
-                )
-            }
-
-            is LoginUiState.Error -> {
-                Text(
-                    text = uiState.message,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
         }
     }
 }
