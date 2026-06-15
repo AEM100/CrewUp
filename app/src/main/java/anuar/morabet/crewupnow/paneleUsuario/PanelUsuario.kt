@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,6 +36,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,8 +49,7 @@ data class UserProfile(
     val name: String,
     val age: Int,
     val bio: String,
-    val avatarUrl: String,
-    // 🔥 Cambiado: Removidos seguidores/seguidos, añadido conteo de participación
+    val avatarBase64: String,
     val organizedEventsCount: Int,
     val participatedEventsCount: Int
 )
@@ -141,31 +142,42 @@ fun UserProfileScreen(
     }
 }
 
+
 @Composable
 fun ProfileHeader(
     user: UserProfile?,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.Top
-    ) {
+    // 🔥 Convertimos el Base64 a Bitmap de Compose
+    val bitmap = remember(user?.avatarBase64) {
+        if (!user?.avatarBase64.isNullOrEmpty()) base64ToBitmap(user!!.avatarBase64) else null
+    }
+
+    Row(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        // --- CÍRCULO DE IMAGEN ---
         Box(
             modifier = Modifier
                 .size(90.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = "Foto de perfil",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = "Foto de perfil",
+                    contentScale = ContentScale.Crop, // Ajusta para que llene el círculo
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                // Icono por defecto si no hay imagen
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(16.dp))

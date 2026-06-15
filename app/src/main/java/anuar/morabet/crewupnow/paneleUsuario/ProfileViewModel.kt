@@ -12,7 +12,6 @@ import kotlinx.coroutines.launch
 
 import anuar.morabet.crewupnow.data.repository.ChatRepository
 
-class Profile
 class ProfileViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState(isLoading = true))
@@ -90,7 +89,7 @@ class ProfileViewModel : ViewModel() {
                     name = session.name,
                     age = 24,
                     bio = session.bio,
-                    avatarUrl = "",
+                    avatarBase64 = session.fotoBase64,
                     organizedEventsCount = 0,
                     participatedEventsCount = 0
                 )

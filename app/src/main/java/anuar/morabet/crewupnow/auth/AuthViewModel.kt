@@ -1,5 +1,6 @@
 package anuar.morabet.crewupnow.auth
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -83,5 +84,10 @@ class AuthViewModel : ViewModel() {
                 }
             }
         }
+    }
+    fun updateServerIp(newIp: String, context: Context) {
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("server_ip", newIp).apply()
+        _uiState.value = AuthUiState.Login // Regresamos al login para reintentar
     }
 }

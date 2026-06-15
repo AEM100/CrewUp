@@ -16,10 +16,12 @@ import com.google.android.gms.maps.MapsInitializer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import anuar.morabet.crewupnow.network.Locator
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Locator.init(this)
         setContent {
             // 1. Sigues necesitando escuchar tu Switch
             val isDarkMode by ThemeManager.isDarkMode.collectAsState()

@@ -1,8 +1,11 @@
 package anuar.morabet.crewupnow.auth
 
+import android.graphics.BitmapFactory
 import android.util.Log
+import androidx.compose.ui.graphics.asImageBitmap
 import anuar.morabet.crewupnow.network.SocketClient
 import org.json.JSONObject
+import android.util.Base64
 
 data class UserSession(
     val id: Int,
@@ -10,6 +13,7 @@ data class UserSession(
     val email: String,
     val token: String,
     val bio: String = "",
+    val fotoBase64: String = "",
     val isAdmin: Boolean = false,
     val isBanned: Boolean = false
 )
@@ -89,24 +93,20 @@ class AuthRepository(private val socketClient: SocketClient) {
     }
 
     private fun parseUser(json: JSONObject): UserSession {
-        // Log para ver qué campos recibimos realmente del servidor
-        Log.d(TAG, "parseUser - Intentando parsear JSON: $json")
-
         val adminFlag = json.optBoolean("isAdmin", false) ||
                 json.optString("tipo_cuenta").uppercase() == "ADMIN" ||
                 json.optString("role").uppercase() == "ADMIN"
 
-        val user = UserSession(
+        return UserSession(
             id = json.getInt("id"),
             name = json.getString("name"),
             email = json.getString("email"),
             token = json.optString("token", ""),
             bio = json.optString("bio", ""),
+            fotoBase64 = json.optString("foto_base64", ""),
             isAdmin = adminFlag,
             isBanned = json.optBoolean("isBanned", false)
         )
-
-        Log.d(TAG, "parseUser - Resultado final isAdmin: ${user.isAdmin}")
-        return user
     }
+
 }

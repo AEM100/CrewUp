@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
-import org.json.JSONObject // Usamos la librería nativa de Android para crear JSON de forma segura
 
 class EditProfileViewModel : ViewModel() {
 
@@ -27,7 +27,9 @@ class EditProfileViewModel : ViewModel() {
             _uiState.update { state ->
                 state.copy(
                     name = usuarioActual.name,
-                    bio = usuarioActual.bio ?: "" // 🔥 Cargamos la bio real que viene del servidor
+                    email = usuarioActual.email,
+                    bio = usuarioActual.bio,
+                    fotoBase64 = usuarioActual.fotoBase64
                 )
             }
         }
@@ -38,14 +40,23 @@ class EditProfileViewModel : ViewModel() {
             is EditProfileDataAction.OnNameChanged -> {
                 _uiState.update { it.copy(name = action.newName) }
             }
+            is EditProfileDataAction.OnEmailChanged -> {
+                _uiState.update { it.copy(email = action.newEmail) }
+            }
             is EditProfileDataAction.OnBioChanged -> {
                 _uiState.update { it.copy(bio = action.newBio) }
+            }
+            is EditProfileDataAction.OnPasswordChanged -> {
+                _uiState.update { it.copy(password = action.newPassword) }
+            }
+            is EditProfileDataAction.OnAvatarSelected -> {
+                _uiState.update { it.copy(fotoBase64 = action.base64) }
             }
             EditProfileDataAction.OnSaveClicked -> {
                 guardarCambiosEnServidor()
             }
             EditProfileDataAction.OnChangeAvatarClicked -> {
-                // Se implementará más adelante junto con el guardado de la foto
+                // Esta acción se maneja desde la UI con el launcher de fotos
             }
         }
     }
@@ -55,31 +66,38 @@ class EditProfileViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             try {
-                // Usamos SessionManager.currentUser que ahora es del tipo UserSession actualizado
                 val usuarioActual = SessionManager.currentUser
                     ?: throw Exception("Error: No se encontró la sesión del usuario.")
 
-                // 1. Construimos el JSON exacto usando JSONObject (como haces en tu AuthRepository)
+                // 1. Construimos el JSON con todos los campos
                 val requestJson = JSONObject().apply {
                     put("action", "UPDATE_PROFILE")
                     put("userId", usuarioActual.id)
                     put("name", _uiState.value.name)
+                    put("email", _uiState.value.email)
                     put("bio", _uiState.value.bio)
+                    // Solo enviamos password si el usuario escribió algo
+                    if (_uiState.value.password.isNotBlank()) {
+                        put("password", _uiState.value.password)
+                    }
+                    put("foto_base64", _uiState.value.fotoBase64)
                 }
 
-                // 2. Enviamos al servidor usando tu método real: sendRequest
+                // 2. Enviamos al servidor
                 val responseString = Locator.socketClient.sendRequest(requestJson.toString())
                     ?: throw Exception("No se pudo conectar con el servidor.")
 
-                // 3. Parseamos la respuesta. ¡Ahora sí te compilará optString!
+                // 3. Parseamos la respuesta
                 val responseJson = JSONObject(responseString)
                 val status = responseJson.optString("status", "ERROR")
 
                 if (status == "SUCCESS") {
-                    // 4. Actualizamos la sesión local copiando el nuevo nombre y la nueva bio
+                    // 4. Actualizamos la sesión local con TODOS los campos
                     SessionManager.currentUser = usuarioActual.copy(
                         name = _uiState.value.name,
-                        bio = _uiState.value.bio // 👈 ¡Ya existe la propiedad!
+                        email = _uiState.value.email,
+                        bio = _uiState.value.bio,
+                        fotoBase64 = _uiState.value.fotoBase64
                     )
 
                     _uiState.update { it.copy(isLoading = false, isSaveSuccess = true) }

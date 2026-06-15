@@ -60,16 +60,26 @@ fun Navigation(
     ) {
 
         composable(Screen.Login.route) {
+            // 1. Instanciamos el ViewModel
             val authViewModel: AuthViewModel = viewModel()
+
+            // 2. Recolectamos el estado de forma segura
             val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
+            // 3. Obtenemos el alcance para la corrutina de carga de eventos
+            val coroutineScope = rememberCoroutineScope()
+
+            // 4. Llamamos al AuthController pasando el ViewModel necesario para el popup de IP
             AuthController(
                 uiState = uiState,
                 onAction = authViewModel::onAction,
+                viewModel = authViewModel, // 🔥 Se pasa el ViewModel para el cambio de IP
                 navigateToHome = {
+                    // Lógica de navegación y sesión
                     if (uiState is AuthUiState.Authenticated) {
                         val loggedUser = (uiState as AuthUiState.Authenticated).user
                         SessionManager.currentUser = loggedUser
+
                         coroutineScope.launch {
                             EventRepository.cargarEventosDelServidor()
                         }
